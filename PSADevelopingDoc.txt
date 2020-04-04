@@ -1,0 +1,5 @@
+editor: sunbo
+environment: Sansung laptop
+
+1. Short Circuit Current
+(1)零序阻抗模型公式：三角形和星型变压器的零序阻抗不同

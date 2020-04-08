@@ -1,8 +1,47 @@
 #include "CIeeeStateEstimation.h"
 #include "CIeeeCA.h"
 #include "MeasBaseTools.h"
+#include "CIeeeSCC.h"
 
 int main(int argc, char** argv)
+{
+	
+	
+	IeeeACPwr mypwr(1000, 2000, 200, 200);//最大1000节点，9999条支路，
+
+	if (mypwr.StandardIeee("C:\\Users\\sunbo\\Desktop\\1.PSASource\\IEEE\\005ieee.dat") < 0) {
+		ErrorMessage << "读取数据文件" << "C:\\Users\\sunbo\\Desktop\\1.PSASource\\IEEE\\005ieee.dat" << "失败！" << endl;
+		return -1;
+	}
+	mypwr.InitPwrGlogbal();
+	if (mypwr.ACPwr(DCFLAG_EQ) < 0) {
+		ErrorMessage << "潮流计算失败！" << endl;
+	}
+	if (mypwr.BSEquality(0) < 0) {
+		ErrorMessage << "BSEquality计算失败！" << endl;
+	}
+	stringstream stemp;
+	stemp.str("");
+	stemp.clear();
+	stemp << "C:\\Users\\sunbo\\Desktop\\1.PSASource\\debug\\" << "DPF_IEEE_bus" << mypwr.nbus << "_branch" << mypwr.nbranch;
+	string fname = stemp.str();
+	mypwr.printTOPO(fname);
+
+
+	CIeeeSCCBase myscc;
+	if (myscc.InitSCCIeeeModel(&mypwr) < 0)
+	{
+		ErrorMessage << "error" << endl;
+	}
+	//myscc.SCCCalc(eThreePhaseShortcircuit, 1);
+	//myscc.SCCCalc(eSinglePhaseGroundShortCircuit, 1);
+	//myscc.SCCCalc(eTwoPhaseShortCircuit, 1);
+	myscc.SCCCalc(eTwoPhaseGroundShortCircuit, 1);
+
+	return 1;
+}
+
+int main2(int argc, char** argv)
 {
 	APPControlParameter message;
 	if (argc < 5) {

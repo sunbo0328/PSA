@@ -138,7 +138,8 @@ typedef class CIeeeSCCBase :virtual public IeeeToolBase {//µ±Ç°¶ÌÂ·µçÁ÷¼ÆËã·½·¨Î
 private:
 	bool flag2_0;//ÊÇ·ñ¼ÆËã¸º¡¢ÁãÁ½ĞòÍøÂç½Úµãµ¼ÄÉ¾ØÕó£¬trueÔò¼ÆËã£¬falseÔò½ö¼ÆËãÕıĞò
 	SparseMatrixByList_GB gb1;//ÕıĞò½Úµãµ¼ÄÉ¾ØÕó
-	//SparseMatrixByList_GB gb2;//¸ºĞò½Úµãµ¼ÄÉ¾ØÕó,
+	//SparseMatrixByList_GB gb2;//¸ºĞò½Úµãµ¼ÄÉ¾ØÕó¡£±»·âÉÏÁË£¬ÒòÎª¶àÊıÉè±¸Õı¸ºĞò×è¿¹ÏàµÈ£¨»ú×éºÍ¸ººÉµ¥¶À´¦Àí£©£¬¿ÉÒÔÓÃÕıĞògb1´¦Àíºó£¬Éú³ÉGB2
+	SparseMatrixByList_GB gb2;	//²âÊÔ£¬½â³ı×¢ÊÍ
 	SparseMatrixByList_GB gb0;//ÁãĞò½Úµãµ¼ÄÉ¾ØÕó
 protected:
 	vector<bool> nullnode0;//ÏÂ±íÎªÄÚ²¿½ÚµãºÅ£¬true±íÊ¾ÁãĞòÍøÂç¿Õ½Úµã±êÖ¾£¨²»Á¬½ÓÈÎºÎÖ§Â·ÁãĞòµÈÖµµçÂ·µÄ½Úµã£©£¬falseÔòÎªÆÕÍ¨½Úµã 
@@ -155,36 +156,43 @@ public:
 	UnsymmetricalShortcircuit_OUT scc2;//Á½ÏàÏà¼ä¶ÌÂ·½á¹û
 	UnsymmetricalShortcircuit_OUT scc2_g;//Á½Ïà½ÓµØ¶ÌÂ·½á¹û
 
+	string shortCircuitType;
 	string sSCCType(eUnsymmetricalShortcircuitType type) {
 		string stype;
 		if (type == eThreePhaseShortcircuit) {
 			stype = "ÈıÏà¶ÌÂ·";
+			shortCircuitType = "ThreePhaseShortcircuit";
 		}
-		else if (type == eThreePhaseShortcircuit) {
+		else if (type == eSinglePhaseGroundShortCircuit) {
 			stype = "µ¥Ïà½ÓµØ¶ÌÂ·";
+			shortCircuitType = "SinglePhaseGroundShortCircuit";
 		}
-		else if (type == eThreePhaseShortcircuit) {
+		else if (type == eTwoPhaseShortCircuit) {
 			stype = "Á½ÏàÏà¼ä¶ÌÂ·";
+			shortCircuitType = "TwoPhaseShortCircuit";
 		}
-		else if (type == eThreePhaseShortcircuit) {
+		else if (type == eTwoPhaseGroundShortCircuit) {
 			stype = "Á½Ïà½ÓµØ¶ÌÂ·";
+			shortCircuitType = "TwoPhaseGroundShortCircuit";
 		}
-		else if (type == eThreePhaseShortcircuit) {
+		else if (type == eSinglePhaseBreak) {
 			stype = "Ò»Ïà¶ÏÏß";
+			shortCircuitType = "SinglePhaseBreak";
 		}
-		else if (type == eThreePhaseShortcircuit) {
+		else if (type == eTwoPhaseBreak) {
 			stype = "Á½Ïà¶ÏÏß";
+			shortCircuitType = "TwoPhaseBreak";
 		}
 		return stype;
 	}
 	CSparseMatrix3_KLU GB1;//ÕıĞò½Úµãµ¼ÄÉ¾ØÕó
 	CSparseMatrix3_KLU GB2;//ÕıĞò½Úµãµ¼ÄÉ¾ØÕó
 	CSparseMatrix3_KLU GB0;//ÕıĞò½Úµãµ¼ÄÉ¾ØÕó
-	int GetSCCGB(int GBType);//»ñµÃ¶ÌÂ·µçÁ÷¼ÆËãËùĞèÕı¡¢¸º¡¢ÁãĞòÍøÂç½Úµãµ¼ÄÉ¾ØÕó£»GBType=1£¬Ôò½ö¼ÆËãÕıĞòÍøÂç½Úµãµ¼ÄÉ¾ØÕó£¬ÎªÆäËûÖµÔòÍ¬Ê±¼ÆËãÕı¡¢¸º¡¢ÁãĞò½Úµãµ¼ÄÉ¾ØÕó£»
+	int GetSCCGB(int GBType);//»ñµÃ¶ÌÂ·µçÁ÷¼ÆËãËùĞèÕı¡¢¸º¡¢ÁãĞòÍøÂç½Úµãµ¼ÄÉ¾ØÕó£»GBType=1£¬Ôò½ö¼ÆËãÕıĞòÍøÂç½Úµãµ¼ÄÉ¾ØÕó£¬ÎªÆäËûÖµÔòÍ¬Ê±¼ÆËãÕı¡¢¸º¡¢ÁãĞò½Úµãµ¼ÄÉ¾ØÕó£»ÊÊÓÃÓÚÁ´±í´æ´¢ĞÎÊ½
 	int InitSCCIeeeModel(IeeeToolBase *MSrc);//µ±Ç°¶ÌÂ·µçÁ÷¼ÆËã·½·¨Îª»ùÓÚ³±Á÷¼ÆËã£¬³õÊ¼»¯ÊäÈë²ÎÊıMSrcÓ¦¸ÃÎª×´Ì¬¹À¼Æ»ò³±Á÷¼ÆËãºóµÄ¼ÆËãÄ£ĞÍ
 	
 	int SCCCalc(eUnsymmetricalShortcircuitType scc_type, int ibs_index, int jbs_index = -1);//¶ÌÂ·µçÁ÷¼ÆËã£¬scc_typeÎª²»¶Ô³Æ¹ÊÕÏÀàĞÍ£¬ibs_index¡¢jbs_indexÎªbus±íË÷Òı£¬ibs_index<0Ê±Îª¶ÌÂ·É¨Ãè£»ibs_index>0Ê±Ôò¼ÆËãÖ¸¶¨¼ÆËãÄ¸Ïß¶ÌÂ·µçÁ÷£»µ±Îª¶ÏÏß¹ÊÕÏÊ±£¬jbs_index±ØĞë¸³ÓĞĞ§Öµ¡£
-	
+	int printGB(int gb1_flag = 0, int gb2_flag = 0, int gb0_flag = 0);
 	CIeeeSCCBase() {
 		flag2_0 = false;
 	}

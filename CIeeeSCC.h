@@ -155,6 +155,8 @@ public:
 	vector<UnsymmetricalShortcircuit_OUT> scc1_out;//单相接地短路结果
 	UnsymmetricalShortcircuit_OUT scc2;//两相相间短路结果
 	UnsymmetricalShortcircuit_OUT scc2_g;//两相接地短路结果
+	UnsymmetricalShortcircuit_OUT m_scc1Break_out;//一相断线结果
+	UnsymmetricalShortcircuit_OUT m_scc2Break_out;//两相断线结果
 
 	string shortCircuitType;
 	string sSCCType(eUnsymmetricalShortcircuitType type) {
@@ -188,11 +190,11 @@ public:
 	CSparseMatrix3_KLU GB1;//正序节点导纳矩阵
 	CSparseMatrix3_KLU GB2;//正序节点导纳矩阵
 	CSparseMatrix3_KLU GB0;//正序节点导纳矩阵
-	int GetSCCGB(int GBType);//获得短路电流计算所需正、负、零序网络节点导纳矩阵；GBType=1，则仅计算正序网络节点导纳矩阵，为其他值则同时计算正、负、零序节点导纳矩阵；适用于链表存储形式
+	int GetSCCGB(int GBType);//获得短路电流计算所需正、负、零序网络节点导纳矩阵；GBType=1，则仅计算正序网络节点导纳矩阵，为其他值则同时计算正、负、零序节点导纳矩阵；先生成链表形式矩阵，再转为KLU形式矩阵
 	int InitSCCIeeeModel(IeeeToolBase *MSrc);//当前短路电流计算方法为基于潮流计算，初始化输入参数MSrc应该为状态估计或潮流计算后的计算模型
 	
 	int SCCCalc(eUnsymmetricalShortcircuitType scc_type, int ibs_index, int jbs_index = -1);//短路电流计算，scc_type为不对称故障类型，ibs_index、jbs_index为bus表索引，ibs_index<0时为短路扫描；ibs_index>0时则计算指定计算母线短路电流；当为断线故障时，jbs_index必须赋有效值。
-	int printGB(int gb1_flag = 0, int gb2_flag = 0, int gb0_flag = 0);
+	int printGB(int gb1_flag = 0, int gb2_flag = 0, int gb0_flag = 0);	//主要用于测试，打印节点导纳矩阵，链表形式上三角矩阵和klu形式全矩阵，分别生成文件
 	CIeeeSCCBase() {
 		flag2_0 = false;
 	}

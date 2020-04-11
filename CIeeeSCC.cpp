@@ -147,7 +147,7 @@ int CIeeeSCCBase::GetSCCGB(int GBType)
 			ijgb = gb1.FindOrAdd(i, j);
 			//i端为非标准侧，j端标准侧//节点i,j自阻抗(pwr_new中也这么处理的，fd_yy函数中tj=1)
 			//branch[it].t = 1;
-			iigb->real += (g / (t*t));
+			iigb->real += (g / (t*t));	//参数为变比为1侧的参数，须折算到高压侧
 			iigb->imag += (b / (t*t));
 			jjgb->real += (g);
 			jjgb->imag += (b);
@@ -319,12 +319,12 @@ int CIeeeSCCBase::GetSCCGB(int GBType)
 		return -1;
 	}
 	if (flag2_0) {
-		gb0.SetIsReady(true);
+		gb0.SetIsReady(true);	//零序导纳矩阵已经在上面处理完成，直接构建阻抗矩阵
 		if (GB0.InitBySCM_Column_KLU(&gb0, eComplexNum2, 0) < 0) {
 			ErrorMessage << "KLU节点导纳矩阵GB0初始化错误！！！" << endl;
 			return -1;
 		}
-		//修正后形成负序节点导纳矩阵
+		//修正后形成负序节点导纳矩阵，用正序导纳矩阵构建负序导纳矩阵，并求逆得负序阻抗矩阵
 		for (it = 0; it < nbus; it++)//并联电容器、电抗器、负荷、机组
 		{
 			//if (DCBus_DCIsland[it] > 0)continue;//直流母线
@@ -410,9 +410,15 @@ int CIeeeSCCBase::ThreePhaseShortcircuit(int bs_index, int nthread, double rf, d
 	int sNum = 0;//扫描起始位置
 	int eNum = 0;//扫描结束位置
 	double *ZZ1_bs = NULL;
+	const size_t nrow = GB1.GetIDim();//节点阻抗矩阵行数
 	if (bs_index < 0) {//扫描所有母线三项短路
 		NBUS = nbus;
 		sNum = 0;
+		for (int i = 0; i < NBUS; i++)	//初始化节点计算结果vector和支路计算结果vector的维数
+		{
+			scc3_out[i].VBus_scc.resize(NBUS);
+			scc3_out[i].IBranch_scc.resize(nbranch);
+		}
 		if (GB1.Inversion() < 0) {
 			ErrorMessage << "矩阵求逆失败！" << endl;
 			return -1;
@@ -425,13 +431,14 @@ int CIeeeSCCBase::ThreePhaseShortcircuit(int bs_index, int nthread, double rf, d
 	else {
 		NBUS = 1;
 		sNum = bs_index;
+		scc3_out[sNum].VBus_scc.resize(nrow);	//初始化节点计算结果vector的维数
+		scc3_out[sNum].IBranch_scc.resize(nbranch);	//初始化支路计算结果vector的维数
 		if (GB1.Inversion(bus[bs_index].ibs, &ZZ1_bs) < 0) {
 			ErrorMessage << "求解bus[" << bs_index << "][bs|" << bus[bs_index].id << "](" << bus[bs_index].name << ")自阻抗互阻抗失败!" << endl;
 			return -1;
 		}
 	}
 	eNum = sNum + NBUS;
-	const size_t nrow = GB1.GetIDim();//节点阻抗矩阵行数
 	int *inb_iwb = GetNBI_WBI();
 	//设置并行线程
 	const int nCPUCore = omp_get_num_procs();
@@ -445,7 +452,7 @@ int CIeeeSCCBase::ThreePhaseShortcircuit(int bs_index, int nthread, double rf, d
 	if (nScreenThread > NBUS) {
 		nScreenThread = NBUS;
 	}
-#pragma omp parallel for num_threads(nScreenThread)
+//#pragma omp parallel for num_threads(nScreenThread)	//并行计算for循环，暂时封上
 	for (int i = sNum; i < eNum; i++)
 	{
 		size_t index = 0;
@@ -472,7 +479,7 @@ int CIeeeSCCBase::ThreePhaseShortcircuit(int bs_index, int nthread, double rf, d
 		scc3_out[i].v_fp.r = vbs*cos(ai);
 		scc3_out[i].v_fp.i = vbs*sin(ai);
 		scc3_out[i].if3 = scc3_out[i].v_fp / (ZZ1_ii + zf);
-		scc3_out[i].clear();
+		//scc3_out[i].clear();	//测试封上，否则会清空结果
 		scc3_out[i].i_fp = scc3_out[i].if3.r*scc3_out[i].if3.r + scc3_out[i].if3.i*scc3_out[i].if3.i;
 		scc3_out[i].i_fp = sqrt(scc3_out[i].i_fp);
 		scc3_out[i].mva_fp = scc3_out[i].i_fp*bus[i].vc*wbase;
@@ -485,8 +492,8 @@ int CIeeeSCCBase::ThreePhaseShortcircuit(int bs_index, int nthread, double rf, d
 		scc3_out[i].VBus_scc[i].v = scc3_out[i].v_fp;
 		//其他任意节点电压计算
 		MYCOMPLEX ZZ1_ij;
-		scc3_out[i].VBus_scc.clear();
-		scc3_out[i].VBus_scc.resize(nbus);
+		//scc3_out[i].VBus_scc.clear();	//测试封上，否则会清空结果
+		//scc3_out[i].VBus_scc.resize(nbus);	//测试封上，否则会清空结果
 		for (int ii = 0; ii < nrow; ii++)//节点导纳编号
 		{
 			iwbbs = inb_iwb[ii];
@@ -557,9 +564,15 @@ int CIeeeSCCBase::SinglePhaseGroundShortCircuit(int bs_index, int nthread, eABCP
 	double *ZZ1_bs = NULL;
 	double *ZZ2_bs = NULL;
 	double *ZZ0_bs = NULL;
+	const size_t nrow = GB1.GetIDim();//各序节点阻抗矩阵行数
 	if (bs_index < 0) {//扫描所有母线单相接地短路故障
 		NBUS = nbus;
 		sNum = 0;
+		for (int i = 0; i < NBUS; i++)	//初始化节点计算结果vector和支路计算结果vector的维数
+		{
+			scc1_out[i].VBus_scc.resize(NBUS);
+			scc1_out[i].IBranch_scc.resize(nbranch);
+		}
 		if (GB1.Inversion() < 0) {
 			ErrorMessage << "矩阵求逆失败！" << endl;
 			return -1;
@@ -580,6 +593,8 @@ int CIeeeSCCBase::SinglePhaseGroundShortCircuit(int bs_index, int nthread, eABCP
 	else {
 		NBUS = 1;
 		sNum = bs_index;
+		scc1_out[sNum].VBus_scc.resize(nrow);	//初始化节点计算结果vector的维数
+		scc1_out[sNum].IBranch_scc.resize(nbranch);	//初始化支路计算结果vector的维数
 		if (GB1.Inversion(bus[bs_index].ibs, &ZZ1_bs) < 0) {
 			ErrorMessage << "求解bus[" << bs_index << "][bs|" << bus[bs_index].id << "](" << bus[bs_index].name << ")正序自阻抗互阻抗失败!" << endl;
 			return -1;
@@ -594,7 +609,6 @@ int CIeeeSCCBase::SinglePhaseGroundShortCircuit(int bs_index, int nthread, eABCP
 		}
 	}
 	eNum = sNum + NBUS;
-	const size_t nrow = GB1.GetIDim();//各序节点阻抗矩阵行数
 	int *inb_iwb = GetNBI_WBI();
 	//设置并行线程
 	const int nCPUCore = omp_get_num_procs();
@@ -1008,6 +1022,163 @@ int CIeeeSCCBase::TwoPhaseGroundShortCircuit(int bs_index, eABCPhase sphase, dou
 int CIeeeSCCBase::SinglePhaseBreak(int ibs_index, int jbs_index, eABCPhase sphase)//一相断线
 {
 
+	if (nbus == 1) {
+		ErrorMessage << "就1个节点，开玩笑？" << endl;
+		return -1;
+	}
+	int NBUS = 0;//扫描母线总数
+	int sNum = 0;//扫描起始位置
+	int eNum = 0;//扫描结束位置
+	double *ZZ1_bs = NULL;
+	double *ZZ2_bs = NULL;
+	double *ZZ0_bs = NULL;
+	const size_t nrow = GB1.GetIDim();//各序节点阻抗矩阵行数
+	if (ibs_index > nbus) {
+		ErrorMessage << "指定母线下表[" << ibs_index << "]无效！" << endl;
+		return -1;
+	}
+	else {
+		NBUS = 1;
+		sNum = ibs_index;
+		m_scc1Break_out.VBus_scc.resize(nrow);	//初始化节点计算结果vector的维数
+		m_scc1Break_out.IBranch_scc.resize(nbranch);	//初始化支路计算结果vector的维数
+		if (GB1.Inversion(bus[ibs_index].ibs, &ZZ1_bs) < 0) {
+			ErrorMessage << "求解bus[" << ibs_index << "][bs|" << bus[ibs_index].id << "](" << bus[ibs_index].name << ")正序自阻抗互阻抗失败!" << endl;
+			return -1;
+		}
+		if (GB2.Inversion(bus[ibs_index].ibs, &ZZ2_bs) < 0) {
+			ErrorMessage << "求解bus[" << ibs_index << "][bs|" << bus[ibs_index].id << "](" << bus[ibs_index].name << ")负序自阻抗互阻抗失败!" << endl;
+			return -1;
+		}
+		if (GB0.Inversion(bus[ibs_index].ibs, &ZZ0_bs) < 0) {
+			ErrorMessage << "求解bus[" << ibs_index << "][bs|" << bus[ibs_index].id << "](" << bus[ibs_index].name << ")零序自阻抗互阻抗失败!" << endl;
+			return -1;
+		}
+	}
+	eNum = sNum + NBUS;
+	int *inb_iwb = GetNBI_WBI();
+	
+	for (int i = sNum; i < eNum; i++)
+	{
+		size_t index = 0;
+		size_t inbbs = 0, iwbbs = 0;
+		double *ZZ1 = NULL;
+		double *ZZ2 = NULL;
+		double *ZZ0 = NULL;
+		inbbs = bus[i].ibs;//内部计算母线号
+		if (NBUS == 1) {
+			ZZ1 = ZZ1_bs;
+			ZZ2 = ZZ2_bs;
+			ZZ0 = ZZ0_bs;
+		}
+		//故障点短路电流计算
+		double vbs = bus[i].vc, ai = bus[i].ac, vbase = bus[i].vbase;
+		double IBase = wbase * _GH3 / vbase * 1000;//故障点短路电流
+		MYCOMPLEX ZZ1_ii, ZZ2_ii, ZZ0_ii;//各序自阻抗
+		MYCOMPLEX zf;//短路阻抗
+		index = inbbs * 2;
+		ZZ1_ii.r = ZZ1[index];
+		ZZ1_ii.i = ZZ1[index + 1];
+		ZZ2_ii.r = ZZ2[index];
+		ZZ2_ii.i = ZZ2[index + 1];
+		ZZ0_ii.r = ZZ0[index];
+		ZZ0_ii.i = ZZ0[index + 1];
+		UnsymmetricalShortcircuit_OUT *scc1 = &m_scc1Break_out;
+		scc1->v_fp.r = vbs * cos(ai);
+		scc1->v_fp.i = vbs * sin(ai);
+		scc1->i1_fp = scc1->v_fp / (ZZ1_ii + ZZ2_ii + ZZ0_ii + zf);
+		scc1->i2_fp = scc1->i1_fp;
+		scc1->i0_fp = scc1->i1_fp;
+		scc1->v1_fp = scc1->v_fp - scc1->i1_fp*ZZ1_ii;
+		scc1->v2_fp = -1 * scc1->i2_fp*ZZ2_ii;
+		scc1->v0_fp = -1 * scc1->i0_fp*ZZ0_ii;
+
+		//其他任意节点电压计算
+		MYCOMPLEX ZZ1_ij;
+		MYCOMPLEX ZZ2_ij;
+		MYCOMPLEX ZZ0_ij;
+		scc1->VBus_scc.clear();
+		scc1->VBus_scc.resize(nbus);
+		for (int ii = 0; ii < nrow; ii++)//节点导纳编号
+		{
+			iwbbs = inb_iwb[ii];
+			if (ii == inbbs) {
+				continue;
+			}
+			index = ii * 2;
+			ZZ1_ij.r = ZZ1[index];
+			ZZ1_ij.i = ZZ1[index + 1];
+			ZZ2_ij.r = ZZ2[index];
+			ZZ2_ij.i = ZZ2[index + 1];
+			ZZ0_ij.r = ZZ0[index];
+			ZZ0_ij.i = ZZ0[index + 1];
+			scc1->VBus_scc[iwbbs].name = bus[iwbbs].name;
+			scc1->VBus_scc[iwbbs].ibs = bus[iwbbs].id;
+			scc1->VBus_scc[iwbbs].iisland = iisland;
+			scc1->VBus_scc[iwbbs].bsindex = iwbbs;
+			scc1->VBus_scc[iwbbs].kvvl = bus[iwbbs].vbase;
+			scc1->VBus_scc[iwbbs].v_pre.r = bus[iwbbs].vc*cos(bus[iwbbs].ac);
+			scc1->VBus_scc[iwbbs].v_pre.i = bus[iwbbs].vc*sin(bus[iwbbs].ac);
+			scc1->VBus_scc[iwbbs].v1 = scc1->VBus_scc[iwbbs].v_pre - ZZ1_ij * scc1->i1_fp;
+			scc1->VBus_scc[iwbbs].v2 = -1 * ZZ2_ij*scc1->i2_fp;
+			scc1->VBus_scc[iwbbs].v0 = -1 * ZZ0_ij*scc1->i0_fp;
+		}
+		//任意支路短路电流
+		MYCOMPLEX zij1, zij2, zij0;
+		MYCOMPLEX Iij1_bch, Iij2_bch, Iij0_bch;
+		size_t iwb = 0, jwb = 0;
+		scc1->IBranch_scc.clear();
+		scc1->IBranch_scc.resize(nbranch);
+		for (int ii = 0; ii < nbranch; ii++)
+		{
+			zij1.r = branch[ii].r;
+			zij1.i = branch[ii].x;
+			zij2.r = branch[ii].r;
+			zij2.i = branch[ii].x;
+			zij0.r = branch[ii].r0;
+			zij0.i = branch[ii].x0;
+			iwb = branch[ii].i;
+			jwb = branch[ii].j;
+			scc1->IBranch_scc[ii].ibranch = ii;
+			if (branch[ii].branchtype == BRANCHTYPE_LN) {//线路
+				Iij1_bch.r = 0;
+				Iij1_bch.i = branch[ii].bch2;
+				Iij2_bch.r = 0;
+				Iij2_bch.i = branch[ii].bch2;
+				Iij0_bch.r = 0;
+				Iij0_bch.i = branch[ii].bch0_2;
+			}
+			else if (branch[ii].branchtype == BRANCHTYPE_LNS) {//串补
+				Iij1_bch.r = 0;
+				Iij1_bch.i = 0;
+				Iij2_bch.r = 0;
+				Iij2_bch.i = 0;
+				Iij0_bch.r = 0;
+				Iij0_bch.i = 0;
+			}
+			else if (branch[ii].branchtype == BRANCHTYPE_XF) {//变压器
+				Iij1_bch.r = 0;
+				Iij1_bch.i = 0;
+				Iij2_bch.r = 0;
+				Iij2_bch.i = 0;
+				Iij0_bch.r = 0;
+				Iij0_bch.i = 0;
+			}
+			scc1->IBranch_scc[ii].i1_i = (scc1->VBus_scc[iwb].v1 - scc1->VBus_scc[jwb].v1) / zij1 + scc1->VBus_scc[iwb].v1*Iij1_bch;
+			scc1->IBranch_scc[ii].i2_i = (scc1->VBus_scc[iwb].v2 - scc1->VBus_scc[jwb].v2) / zij2 + scc1->VBus_scc[iwb].v2*Iij2_bch;
+			scc1->IBranch_scc[ii].i0_i = (scc1->VBus_scc[iwb].v0 - scc1->VBus_scc[jwb].v0) / zij0 + scc1->VBus_scc[iwb].v0*Iij0_bch;
+			scc1->IBranch_scc[ii].i1_j = (scc1->VBus_scc[jwb].v1 - scc1->VBus_scc[iwb].v1) / zij1 + scc1->VBus_scc[jwb].v1*Iij1_bch;
+			scc1->IBranch_scc[ii].i2_j = (scc1->VBus_scc[jwb].v2 - scc1->VBus_scc[iwb].v2) / zij2 + scc1->VBus_scc[jwb].v2*Iij2_bch;
+			scc1->IBranch_scc[ii].i0_j = (scc1->VBus_scc[jwb].v0 - scc1->VBus_scc[iwb].v0) / zij0 + scc1->VBus_scc[jwb].v0*Iij0_bch;
+			//scc1->IBranch_scc[ii].i_i = sqrt(scc1->IBranch_scc[ii].i3_i.r*scc1->IBranch_scc[ii].i3_i.r + scc1->IBranch_scc[ii].i3_i.i*scc1->IBranch_scc[ii].i3_i.i);
+			//scc1->IBranch_scc[ii].i_j = sqrt(scc1->IBranch_scc[ii].i3_j.r*scc1->IBranch_scc[ii].i3_j.r + scc1->IBranch_scc[ii].i3_j.i*scc1->IBranch_scc[ii].i3_j.i);
+			//vbase = bus[iwb].vbase;
+			//IBase = wbase*_GH3 / vbase * 1000;
+			//scc1->IBranch_scc[ii].i_i *= IBase;
+			//scc1->IBranch_scc[ii].i_j *= IBase;
+		}
+	}
+
 	return 1;
 }
 int CIeeeSCCBase::TwoPhaseBreak(int ibs_index, int jbs_index, eABCPhase sphase)//两相断线
@@ -1016,15 +1187,32 @@ int CIeeeSCCBase::TwoPhaseBreak(int ibs_index, int jbs_index, eABCPhase sphase)/
 }
 int CIeeeSCCBase::SCCCalc(eUnsymmetricalShortcircuitType scc_type, int ibs_index, int jbs_index)
 {
+	sSCCType(scc_type);
 	if (scc_type == eThreePhaseShortcircuit) {
 		scc3_out.clear();
 		scc3_out.resize(nbus);
+		GetSCCGB(1);
+		ThreePhaseShortcircuit(1);
 	}
-	else if(scc_type == eSinglePhaseGroundShortCircuit) {
+	else if (scc_type == eSinglePhaseGroundShortCircuit) {
 		scc1_out.clear();
 		scc1_out.resize(nbus);
+		GetSCCGB(0);	//计算零负序导纳矩阵
+		SinglePhaseGroundShortCircuit(1);
 	}
-
+	else if (scc_type == eTwoPhaseShortCircuit) {
+		scc1_out.clear();
+		scc1_out.resize(nbus);
+		GetSCCGB(0);	//计算零负序导纳矩阵
+		TwoPhaseShortCircuit(1, eAPhase);
+	}
+	else if (scc_type == eTwoPhaseGroundShortCircuit) {
+		scc1_out.clear();
+		scc1_out.resize(nbus);
+		GetSCCGB(0);	//计算零负序导纳矩阵
+		TwoPhaseGroundShortCircuit(1, eAPhase);
+	}
+	printGB(1, 1, 1);
 
 	return 1;
 }
@@ -1749,4 +1937,33 @@ int ShortCircuitRatioCalc::PrintMIESCR()
 	log << endl << endl;
 	log.close();
 	return 1;
+}
+int CIeeeSCCBase::printGB(int gb1_flag, int gb2_flag, int gb0_flag)
+{
+	string fileName = "C:\\Users\\sunbo\\Desktop\\1.PSASource\\debug\\shortCircuitType";
+	if (gb1_flag == 1)
+	{
+		//fileName += "_gb1.txt";
+		int line = gb1.RIDim();
+		int row = gb1.RJDim();
+		gb1.printM(fileName + "_gb1.txt");
+		GB1.PrintSM(fileName + "_GB1_klu.txt");
+	}
+	if (gb2_flag == 1)
+	{
+		//fileName += "_gb2.txt";
+		int line = gb2.RIDim();
+		int row = gb2.RJDim();
+		gb2.printM(fileName + "_gb2.txt");
+		GB2.PrintSM(fileName + "_GB2_klu.txt");
+	}
+	if (gb0_flag == 1)
+	{
+		//fileName += "_gb0.txt";
+		int line = gb0.RIDim();
+		int row = gb0.RJDim();
+		gb0.printM(fileName + "_gb0.txt");
+		GB0.PrintSM(fileName + "_GB0_klu.txt");
+	}
+	return 0;
 }
